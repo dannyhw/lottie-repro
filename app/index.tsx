@@ -38,8 +38,38 @@ export default function Index() {
   const [showAnimations, setShowAnimations] = useState(false);
   const [mountCount, setMountCount] = useState(0);
   const [animationCount, setAnimationCount] = useState(ANIMATION_COUNT);
+  const [stressTestRunning, setStressTestRunning] = useState(false);
+  const stressTestRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Stress test loop
+  useEffect(() => {
+    if (stressTestRunning) {
+      const runCycle = () => {
+        setShowAnimations((prev) => {
+          if (prev) {
+            console.log("=== STRESS TEST: UNMOUNTING ===");
+            return false;
+          } else {
+            console.log("=== STRESS TEST: MOUNTING ===");
+            setMountCount((c) => c + 1);
+            return true;
+          }
+        });
+        stressTestRef.current = setTimeout(runCycle, 500);
+      };
+      runCycle();
+    }
+
+    return () => {
+      if (stressTestRef.current) {
+        clearTimeout(stressTestRef.current);
+        stressTestRef.current = null;
+      }
+    };
+  }, [stressTestRunning]);
 
   const handleToggle = useCallback(() => {
+    if (stressTestRunning) return; // Disable manual toggle during stress test
     if (showAnimations) {
       console.log("=== UNMOUNTING ALL LOTTIE ANIMATIONS ===");
       setShowAnimations(false);
@@ -48,16 +78,27 @@ export default function Index() {
       setMountCount((c) => c + 1);
       setShowAnimations(true);
     }
-  }, [showAnimations]);
+  }, [showAnimations, stressTestRunning]);
 
   const handleRemount = useCallback(() => {
+    if (stressTestRunning) return;
     console.log("=== REMOUNTING ALL ANIMATIONS (unmount then mount) ===");
     setShowAnimations(false);
     setTimeout(() => {
       setMountCount((c) => c + 1);
       setShowAnimations(true);
     }, 100);
-  }, []);
+  }, [stressTestRunning]);
+
+  const handleStressTest = useCallback(() => {
+    if (stressTestRunning) {
+      console.log("=== STOPPING STRESS TEST ===");
+      setStressTestRunning(false);
+    } else {
+      console.log("=== STARTING STRESS TEST ===");
+      setStressTestRunning(true);
+    }
+  }, [stressTestRunning]);
 
   const incrementCount = useCallback(() => {
     setAnimationCount((c) => Math.min(c + 10, 200));
@@ -98,7 +139,7 @@ export default function Index() {
             </Text>
           </Pressable>
 
-          {showAnimations && (
+          {showAnimations && !stressTestRunning && (
             <Pressable
               style={[styles.button, styles.buttonSecondary]}
               onPress={handleRemount}
@@ -107,6 +148,18 @@ export default function Index() {
             </Pressable>
           )}
         </View>
+
+        <Pressable
+          style={[
+            styles.stressButton,
+            stressTestRunning ? styles.buttonWarning : styles.buttonStress,
+          ]}
+          onPress={handleStressTest}
+        >
+          <Text style={styles.buttonText}>
+            {stressTestRunning ? "Stop Stress Test" : "Start Stress Test"}
+          </Text>
+        </Pressable>
 
         <Text style={styles.instructions}>
           1. Tap &quot;Mount Animations&quot; to render {animationCount} Lottie
@@ -144,7 +197,11 @@ export default function Index() {
       <View style={styles.footer}>
         <Text style={styles.footerText}>
           Status:{" "}
-          {showAnimations ? `${animationCount} animations active` : "Idle"}
+          {stressTestRunning
+            ? `🔄 Stress test running (cycle ${mountCount})`
+            : showAnimations
+            ? `${animationCount} animations active`
+            : "Idle"}
         </Text>
       </View>
     </View>
@@ -200,6 +257,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
   },
+  stressButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    alignItems: "center",
+  },
   smallButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
@@ -214,6 +277,14 @@ const styles = StyleSheet.create({
   },
   buttonDanger: {
     backgroundColor: "#dc2626",
+  },
+  buttonStress: {
+    backgroundColor: "#9333ea",
+    marginBottom: 16,
+  },
+  buttonWarning: {
+    backgroundColor: "#ea580c",
+    marginBottom: 16,
   },
   buttonText: {
     color: "#fff",
